@@ -1,0 +1,72 @@
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+#include "sps30.h"
+#include "sensirion_i2c.h"
+
+
+// === Objects ===
+Adafruit_ADS1115 ads;
+
+// === Motor Pin ===
+#define MOTOR_PIN 5 // Use any GPIO pin connected to VP04 input
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  delay(1000);
+
+  // Motor setup
+  pinMode(MOTOR_PIN, OUTPUT);
+  digitalWrite(MOTOR_PIN, LOW); // Start OFF
+
+  // === ADS1115 Init ===
+  if (!ads.begin()) {
+    Serial.println("ADS1115 not found!");
+    while (1);
+  }
+  ads.setGain(GAIN_ONE); // ±4.096V
+
+  // === SPS30 Init ===
+  sensirion_i2c_init();
+  if (sps30_probe() != 0) {
+    Serial.println("SPS30 not found!");
+  } else {
+    Serial.println("SPS30 ready.");
+    sps30_set_fan_auto_cleaning_interval_days(4);
+    sps30_start_measurement();
+  }
+}
+
+void loop() {
+  delay(2000);
+
+  // === Read SPS30 ===
+  struct sps30_measurement m;
+  if (sps30_read_measurement(&m) == 0) {
+    Serial.print("PM1.0: "); Serial.print(m.mc_1p0);
+    Serial.print(" | PM2.5: "); Serial.print(m.mc_2p5);
+    Serial.print(" | PM4.0: "); Serial.print(m.mc_4p0);
+    Serial.print(" | PM10: "); Serial.print(m.mc_10p0);
+  } else {
+    Serial.print("SPS30 read failed");
+  }
+
+  int16_t adc0, adc1, adc2, adc3;
+  float volts0, volts1, volts2, volts3;
+
+  adc0 = ads.readADC_SingleEnded(0);
+  adc1 = ads.readADC_SingleEnded(1);
+  adc2 = ads.readADC_SingleEnded(2);
+  adc3 = ads.readADC_SingleEnded(3);
+
+  volts0 = ads.computeVolts(adc0);
+  volts1 = ads.computeVolts(adc1);
+  volts2 = ads.computeVolts(adc2);
+  volts3 = ads.computeVolts(adc3);
+
+  Serial.println();
+  Serial.print("AIN0: "); Serial.print(adc0); Serial.print("  "); Serial.print(volts0); Serial.println("V");
+  Serial.print("AIN1: "); Serial.print(adc1); Serial.print("  "); Serial.print(volts1); Serial.println("V");
+  Serial.print("AIN2: "); Serial.print(adc2); Serial.print("  "); Serial.print(volts2); Serial.println("V");
+  Serial.print("AIN3: "); Serial.print(adc3); Serial.print("  "); Serial.print(volts3); Serial.println("V");
+}
